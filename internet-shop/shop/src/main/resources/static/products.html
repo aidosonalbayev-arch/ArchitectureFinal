@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>ShopKZ — Products</title>
+  <link rel="stylesheet" href="css/style.css"/>
+</head>
+<body>
+<nav class="navbar">
+  <div class="nav-logo">Shop<span>KZ</span></div>
+  <div class="nav-links">
+    <a href="products.html" class="nav-link active">Products</a>
+    <a href="orders.html" class="nav-link">My Orders</a>
+    <a href="admin.html" class="nav-link" id="admin-link" style="display:none">Admin Panel</a>
+  </div>
+  <div class="nav-right">
+    <button class="cart-btn" onclick="location.href='cart.html'">
+      🛒 Cart <span class="nav-badge cart-count">0</span>
+    </button>
+    <span class="nav-user" id="nav-user"></span>
+    <button class="btn btn-ghost btn-sm" onclick="logout()">Sign Out</button>
+  </div>
+</nav>
+
+<div class="page">
+  <div class="page-header">
+    <div class="page-title">All Products</div>
+    <div class="filters">
+      <div class="search-box">
+        <span class="search-icon">🔍</span>
+        <input type="text" id="search" placeholder="Search products..." oninput="filter()"/>
+      </div>
+      <select id="cat-filter" onchange="filter()">
+        <option value="">All Categories</option>
+      </select>
+    </div>
+  </div>
+  <div id="grid" class="products-grid"><div class="loading">Loading</div></div>
+</div>
+
+<!-- OVERLAY + MODAL (admin add/edit) -->
+<div id="overlay" class="overlay hidden" onclick="closeAll()"></div>
+<div id="modal-product" class="modal hidden">
+  <div class="modal-head">
+    <h3 id="modal-title">Add Product</h3>
+    <button class="modal-close" onclick="closeAll()">✕</button>
+  </div>
+  <div class="modal-body">
+    <div class="form-group"><label>Name</label><input id="p-name" placeholder="Product name"/></div>
+    <div class="form-group"><label>Description</label><textarea id="p-desc" rows="2" placeholder="Description"></textarea></div>
+    <div class="form-row">
+      <div class="form-group"><label>Price ($)</label><input type="number" id="p-price" placeholder="0.00"/></div>
+      <div class="form-group"><label>Stock</label><input type="number" id="p-stock" placeholder="0"/></div>
+    </div>
+    <div class="form-group"><label>Category</label><select id="p-cat"></select></div>
+  </div>
+  <div class="modal-foot">
+    <button class="btn btn-ghost" onclick="closeAll()">Cancel</button>
+    <button class="btn btn-primary" onclick="saveProduct()">Save Product</button>
+  </div>
+</div>
+
+<button id="fab" class="fab hidden" onclick="openAdd()" title="Add product">+</button>
+
+<script src="js/api.js"></script>
+<script>
+let all=[], cats=[], editId=null;
+
+const ICONS={'Electronics':'💻','Clothing':'👕','Books':'📚','default':'📦'};
+const icon=n=>ICONS[n]||ICONS.default;
+
+async function init(){
+  const u=requireAuth(); if(!u) return;
+  if(u.role==='ADMIN'){ document.getElementById('admin-link').style.display=''; document.getElementById('fab').classList.remove('hidden'); }
+  try{
+    [all,cats]=await Promise.all([get('/products'),get('/categories')]);
+    const sel=document.getElementById('cat-filter');
+    cats.forEach(c=>{ const o=document.createElement('option'); o.value=c.id; o.textContent=c.name; sel.appendChild(o); });
+    const ps=document.getElementById('p-cat');
+    cats.forEach(c=>{ const o=document.createElement('option'); o.value=c.id; o.textContent=c.name; ps.appendChild(o); });
+    render(all);
+  }catch(e){ document.getElementById('grid').innerHTML='<div class="empty"><div class="empty-icon">⚠️</div><h3>Failed to load</h3></div>'; }
+}
+
+function render(list){
+  const g=document.getElementById('grid');
+  const u=getUser();
+  if(!list.length){ g.innerHTML='<div class="empty"><div class="empty-icon">🔍</div><h3>No products found</h3></div>'; return; }
+  g.innerHTML=list.map(p=>`
+    <div class="product-card">
+      <div class="product-thumb">${icon(p.category?.name)}</div>
+      <div class="product-body">
+        <div class="product-cat">${p.category?.name||'—'}</div>
+        <div class="product-name">${p.name}</div>
+        <div class="product-desc">${p.description||'—'}</div>
+      </div>
+      <div class="product-footer">
+        <div>
+          <div class="product-price">${fmtPrice(p.price)}</div>
+          <div class="${p.stock>0?'product-stock-ok':'product-stock-out'}">${p.stock>0?'✓ In stock: '+p.stock:'✗ Out of stock'}</div>
+        </div>
+        <button class="btn btn-primary btn-sm" onclick='addToCart(${JSON.stringify(p).replace(/'/g,"\\'")})'
+          ${p.stock>0?'':'disabled'}>+ Cart</button>
+      </div>
+      ${u?.role==='ADMIN'?`
+      <div class="product-admin-btns">
+        <button class="btn btn-ghost btn-sm" style="flex:1" onclick="openEdit(${p.id})">✏️ Edit</button>
+        <button class="btn btn-danger btn-sm" style="flex:1" onclick="delProduct(${p.id})">🗑️ Delete</button>
+      </div>`:''}
+    </div>
+  `).join('');
+}
+
+function filter(){
+  const q=document.getElementById('search').value.toLowerCase();
+  const c=document.getElementById('cat-filter').value;
+  render(all.filter(p=>p.name.toLowerCase().includes(q)&&(!c||String(p.category?.id)===c)));
+}
+
+function openAdd(){
+  editId=null;
+  document.getElementById('modal-title').textContent='Add Product';
+  ['p-name','p-desc','p-price','p-stock'].forEach(id=>document.getElementById(id).value='');
+  openModal('modal-product');
+}
+
+function openEdit(id){
+  const p=all.find(x=>x.id===id); if(!p) return;
+  editId=id;
+  document.getElementById('modal-title').textContent='Edit Product';
+  document.getElementById('p-name').value=p.name;
+  document.getElementById('p-desc').value=p.description||'';
+  document.getElementById('p-price').value=p.price;
+  document.getElementById('p-stock').value=p.stock;
+  document.getElementById('p-cat').value=p.category?.id||'';
+  openModal('modal-product');
+}
+
+async function saveProduct(){
+  const body={name:document.getElementById('p-name').value.trim(),description:document.getElementById('p-desc').value.trim(),price:parseFloat(document.getElementById('p-price').value),stock:parseInt(document.getElementById('p-stock').value),categoryId:parseInt(document.getElementById('p-cat').value)||null};
+  if(!body.name||isNaN(body.price)){toast('Please fill name and price','err');return;}
+  try{
+    if(editId) await put('/products/'+editId,body); else await post('/products',body);
+    toast(editId?'Product updated ✓':'Product added ✓');
+    closeAll(); all=await get('/products'); filter();
+  }catch(e){toast('Error: '+e.message,'err');}
+}
+
+async function delProduct(id){
+  if(!confirm('Delete this product?')) return;
+  try{ await del('/products/'+id); toast('Deleted'); all=await get('/products'); filter(); }
+  catch(e){toast('Error: '+e.message,'err');}
+}
+
+init();
+</script>
+</body>
+</html>
