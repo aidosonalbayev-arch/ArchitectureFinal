@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>ShopKZ — My Orders</title>
+  <link rel="stylesheet" href="css/style.css"/>
+</head>
+<body>
+<nav class="navbar">
+  <div class="nav-logo">Shop<span>KZ</span></div>
+  <div class="nav-links">
+    <a href="products.html" class="nav-link">Products</a>
+    <a href="orders.html" class="nav-link active">My Orders</a>
+  </div>
+  <div class="nav-right">
+    <button class="cart-btn" onclick="location.href='cart.html'">🛒 Cart <span class="nav-badge cart-count">0</span></button>
+    <span class="nav-user" id="nav-user"></span>
+    <button class="btn btn-ghost btn-sm" onclick="logout()">Sign Out</button>
+  </div>
+</nav>
+
+<div class="page">
+  <div class="page-header">
+    <div class="page-title">My Orders</div>
+  </div>
+  <div id="list"></div>
+</div>
+
+<script src="js/api.js"></script>
+<script>
+const STATUS={PENDING:'badge-pending',CONFIRMED:'badge-confirmed',SHIPPED:'badge-shipped',DELIVERED:'badge-delivered',CANCELLED:'badge-cancelled'};
+
+async function init(){
+  const u=requireAuth(); if(!u) return;
+  try{
+    const orders=await get('/orders/user/'+u.id);
+    const el=document.getElementById('list');
+    if(!orders.length){
+      el.innerHTML='<div class="empty"><div class="empty-icon">📦</div><h3>No orders yet</h3><p>Start shopping to see your orders here.</p><br/><a href="products.html" class="btn btn-primary" style="display:inline-flex">Browse Products</a></div>'; return;
+    }
+    const sorted=[...orders].sort((a,b)=>new Date(b.createdAt)-new Date(a.createdAt));
+    el.innerHTML=sorted.map(o=>`
+      <div class="order-card">
+        <div class="order-head">
+          <div>
+            <div class="order-id">Order #${o.id}</div>
+            <div class="order-date">${fmtDate(o.createdAt)}</div>
+          </div>
+          <span class="badge ${STATUS[o.status]||''}">${o.status}</span>
+          <div style="font-weight:700;font-size:1rem">${fmtPrice(o.totalPrice)}</div>
+        </div>
+        <div class="order-items-wrap">
+          ${(o.items||[]).map(i=>`
+            <div class="order-item-row">
+              <span>${i.product?.name||'Product'}</span>
+              <span>${i.quantity}× ${fmtPrice(i.unitPrice)}</span>
+            </div>`).join('')}
+        </div>
+      </div>`).join('');
+  }catch(e){ document.getElementById('list').innerHTML='<div class="empty"><div class="empty-icon">⚠️</div><h3>Failed to load</h3></div>'; }
+}
+init();
+</script>
+</body>
+</html>

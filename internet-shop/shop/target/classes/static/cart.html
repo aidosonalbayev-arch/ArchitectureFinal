@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>ShopKZ — Cart</title>
+  <link rel="stylesheet" href="css/style.css"/>
+</head>
+<body>
+<nav class="navbar">
+  <div class="nav-logo">Shop<span>KZ</span></div>
+  <div class="nav-links">
+    <a href="products.html" class="nav-link">Products</a>
+    <a href="orders.html" class="nav-link">My Orders</a>
+  </div>
+  <div class="nav-right">
+    <button class="cart-btn active" onclick="location.href='cart.html'">🛒 Cart <span class="nav-badge cart-count">0</span></button>
+    <span class="nav-user" id="nav-user"></span>
+    <button class="btn btn-ghost btn-sm" onclick="logout()">Sign Out</button>
+  </div>
+</nav>
+
+<div class="page">
+  <div class="page-header">
+    <div class="page-title">Shopping Cart</div>
+    <a href="products.html" class="btn btn-ghost btn-sm">← Continue Shopping</a>
+  </div>
+  <div class="cart-layout">
+    <div id="cart-items" class="cart-items"><div class="loading">Loading</div></div>
+    <div class="summary-card">
+      <h3>Order Summary</h3>
+      <div class="summary-row"><span>Items</span><span id="s-count">0</span></div>
+      <div class="summary-total"><span>Total</span><span id="s-total">$0.00</span></div>
+      <button class="btn btn-primary btn-full" id="checkout-btn" onclick="placeOrder()" style="margin-top:1.25rem">Place Order</button>
+      <button class="btn btn-danger btn-full" onclick="clearCart()" style="margin-top:0.5rem">Clear Cart</button>
+    </div>
+  </div>
+</div>
+
+<!-- success -->
+<div id="success-screen" class="hidden" style="position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:300;display:flex;align-items:center;justify-content:center;backdrop-filter:blur(6px)">
+  <div style="background:var(--bg2);border:1px solid var(--border2);border-radius:20px;padding:3rem;text-align:center;max-width:380px;width:90%">
+    <div style="font-size:3.5rem;margin-bottom:1rem">✅</div>
+    <h3 style="font-size:1.4rem;font-weight:700;margin-bottom:.5rem">Order Placed!</h3>
+    <p style="color:var(--muted);margin-bottom:1.5rem">Your order has been successfully submitted.</p>
+    <div style="display:flex;flex-direction:column;gap:.5rem">
+      <button class="btn btn-primary" onclick="location.href='orders.html'">View Orders</button>
+      <button class="btn btn-ghost" onclick="location.href='products.html'">Keep Shopping</button>
+    </div>
+  </div>
+</div>
+
+<script src="js/api.js"></script>
+<script>
+function init(){ requireAuth(); renderCart(); }
+
+function renderCart(){
+  const cart=getCart();
+  const el=document.getElementById('cart-items');
+  const btn=document.getElementById('checkout-btn');
+  if(!cart.length){
+    el.innerHTML='<div class="empty"><div class="empty-icon">🛒</div><h3>Your cart is empty</h3><p>Browse products and add items to your cart.</p></div>';
+    document.getElementById('s-count').textContent='0';
+    document.getElementById('s-total').textContent='$0.00';
+    btn.disabled=true; return;
+  }
+  btn.disabled=false;
+  const qty=cart.reduce((s,i)=>s+i.quantity,0);
+  const total=cart.reduce((s,i)=>s+i.price*i.quantity,0);
+  document.getElementById('s-count').textContent=qty+' items';
+  document.getElementById('s-total').textContent=fmtPrice(total);
+  el.innerHTML=cart.map(i=>`
+    <div class="cart-item">
+      <div class="cart-icon">📦</div>
+      <div class="cart-info">
+        <div class="cart-name">${i.name}</div>
+        <div class="cart-unit">${fmtPrice(i.price)} each</div>
+      </div>
+      <div class="qty-ctrl">
+        <button class="qty-btn" onclick="chQty(${i.productId},-1)">−</button>
+        <span class="qty-n">${i.quantity}</span>
+        <button class="qty-btn" onclick="chQty(${i.productId},1)">+</button>
+      </div>
+      <div class="cart-line">${fmtPrice(i.price*i.quantity)}</div>
+      <button class="remove-btn" onclick="rm(${i.productId})">✕</button>
+    </div>`).join('');
+}
+
+function chQty(id,d){
+  const cart=getCart(); const item=cart.find(i=>i.productId===id); if(!item) return;
+  item.quantity+=d; if(item.quantity<=0) cart.splice(cart.indexOf(item),1);
+  saveCart(cart); renderCart();
+}
+function rm(id){ saveCart(getCart().filter(i=>i.productId!==id)); renderCart(); }
+function clearCart(){ if(confirm('Clear cart?')){ saveCart([]); renderCart(); } }
+
+async function placeOrder(){
+  const u=getUser(); const cart=getCart(); if(!cart.length) return;
+  const btn=document.getElementById('checkout-btn');
+  btn.disabled=true; btn.textContent='Placing order...';
+  try{
+    await post('/orders',{userId:u.id,items:cart.map(i=>({productId:i.productId,quantity:i.quantity}))});
+    saveCart([]);
+    document.getElementById('success-screen').classList.remove('hidden');
+  }catch(e){ toast('Order failed: '+e.message,'err'); btn.disabled=false; btn.textContent='Place Order'; }
+}
+init();
+</script>
+</body>
+</html>
