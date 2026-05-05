@@ -91,7 +91,7 @@ order_items
 **1. Clone the repository**
 
 ```bash
-git clone https://github.com/your-username/internet-shop.git
+https://github.com/aidosonalbayev-arch/ArchitectureFinal.git
 cd internet-shop/shop
 ```
 
@@ -105,8 +105,8 @@ Edit `src/main/resources/application.properties`:
 
 ```properties
 spring.datasource.url=jdbc:postgresql://localhost:5432/ArchFinal
-spring.datasource.username=postgres
-spring.datasource.password=your_password
+spring.datasource.username=newAidos
+spring.datasource.password=aidos
 ```
 
 **4. Run the application**
